@@ -1,0 +1,7 @@
+{
+  "variants": {
+    "": {
+      "model": "ccnradio:block/tape_recorder"
+    }
+  }
+}

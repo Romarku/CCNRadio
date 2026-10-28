@@ -1,0 +1,19 @@
+{
+  "variants": {
+    "facing=north": {
+      "model": "ccnradio:block/tape_player"
+    },
+    "facing=east": {
+      "model": "ccnradio:block/tape_player",
+      "y": 90
+    },
+    "facing=south": {
+      "model": "ccnradio:block/tape_player",
+      "y": 180
+    },
+    "facing=west": {
+      "model": "ccnradio:block/tape_player",
+      "y": 270
+    }
+  }
+}
