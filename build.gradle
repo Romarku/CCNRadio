@@ -122,6 +122,11 @@ repositories {
     // }
 }
 
+configurations {
+    // Libraries that are unpacked into the mod jar (see the jar task below).
+    bundled
+}
+
 dependencies {
     // Specify the version of Minecraft to use.
     // Any artifact can be supplied so long as it has a "userdev" classifier artifact and is a compatible patcher artifact.
@@ -129,6 +134,11 @@ dependencies {
     // If the group id is "net.minecraft" and the artifact id is one of ["client", "server", "joined"],
     // then special handling is done to allow a setup of a vanilla dependency without the use of an external repository.
     minecraft "net.minecraftforge:forge:1.20.1-47.4.28"
+
+    // MP3 decoding for the tape player. JLayer is small, pure Java (LGPL-2.1) and is
+    // unpacked into the mod jar so players do not have to install anything extra.
+    implementation 'javazoom:jlayer:1.0.1'
+    bundled 'javazoom:jlayer:1.0.1'
 
     // Example mod dependency with JEI - using fg.deobf() ensures the dependency is remapped to your development mappings
     // The JEI API is declared for compile time use, while the full JEI artifact is used at runtime
@@ -167,6 +177,16 @@ tasks.named('processResources', ProcessResources).configure {
 
 // Example for how to get properties into the manifest for reading at runtime.
 tasks.named('jar', Jar).configure {
+    // Unpack the bundled libraries (JLayer) into the mod jar, so a single jar works on a
+    // normal client/server without installing anything else.
+    from({ configurations.bundled.collect { it.isDirectory() ? it : zipTree(it) } }) {
+        exclude 'META-INF/MANIFEST.MF'
+        exclude 'META-INF/*.SF', 'META-INF/*.DSA', 'META-INF/*.RSA'
+        // Only the decoder is used; the player/converter packages pull in Java Sound classes.
+        exclude 'javazoom/jl/player/**'
+        exclude 'javazoom/jl/converter/**'
+    }
+
     manifest {
         attributes([
                 'Specification-Title'     : mod_id,

@@ -90,7 +90,8 @@ public final class MediaEntry {
             long size = json.get("size").getAsLong();
             String format = json.get("format").getAsString();
             long createdAt = json.has("createdAt") ? json.get("createdAt").getAsLong() : 0L;
-            if (duration <= 0 || size <= 0 || (!"ogg".equals(format) && !"wav".equals(format))) {
+            if (duration <= 0 || size <= 0 || (!"ogg".equals(format) && !"wav".equals(format)
+                    && !"mp3".equals(format))) {
                 return null;
             }
             return new MediaEntry(id, uploader, uploaderName, displayName, duration, size, format, createdAt);

@@ -29,13 +29,16 @@ A Minecraft **1.20.1 Forge** mod that adds a server-backed tape recorder and a t
 
 ## Audio formats
 
-To avoid extra native dependencies, the mod accepts:
+The mod accepts:
 
 - **OGG Vorbis** (`.ogg`) – decoded with LWJGL's bundled `stb_vorbis`.
 - **WAV** (`.wav`) – decoded/converted with the JDK's Java Sound implementation.
+- **MP3** (`.mp3`) – decoded with [JLayer](https://www.javazoom.net/javalayer/javalayer.html),
+  which is unpacked into the mod jar (LGPL-2.1, see `LICENSE-JLAYER.txt`). No extra download or
+  native library is required on the client.
 
-MP3 is intentionally not accepted. Uploads are rejected when they exceed **10 minutes** or
-**20 MB** (server-side re-validation is authoritative).
+Uploads are rejected when they exceed **10 minutes** or **20 MB** (server-side re-validation is
+authoritative).
 
 ## Storage layout
 
@@ -68,7 +71,8 @@ Requirements: JDK 17 and the included Gradle wrapper.
 gradlew.bat build
 ```
 
-The mod jar is written to `build/libs/ccnradio-1.0.0.jar`.
+The mod jar is written to `build/libs/ccnradio-1.1.0.jar`. It already contains the JLayer
+classes needed for MP3 playback, so a single jar is enough.
 
 Gradle 8.8 itself must run on JDK 17–21. A newer JDK on `PATH` (for example JDK 25) is not
 supported by this Gradle/ForgeGradle combination and fails while compiling the build script with
@@ -115,6 +119,10 @@ mod jar. In short:
 
 The mod is provided **without any warranty**, as stated in the license.
 
+The bundled MP3 decoder **JLayer 1.0.1** is licensed under the **LGPL-2.1**; its license text is
+in `LICENSE-JLAYER.txt` (also inside the jar). JLayer is an independent library and its license
+does not change the GPL-3.0 licensing of this mod.
+
 > Note: the pre-existing `LICENSE.txt` is the Forge MDK's notice for the Forge/MCP components
 > used by the development environment; it does not apply to the mod's own code.
 
@@ -126,6 +134,10 @@ The mod is provided **without any warranty**, as stated in the license.
   recorder still uses vanilla textures and can be given a custom model the same way.
 - The client uses Java Sound for playback so distance attenuation and stereo panning can be
   applied directly. The RECORDS and MASTER volume sliders are respected.
+- A tape is announced one second before its playback clock starts. Clients use that window to
+  fetch the media, so **short clips** are no longer skipped when the download finishes after the
+  clip would already have ended. Downloads that fail transiently are retried instead of muting
+  the tape for its whole duration.
 - **Browse...** opens the operating system's file chooser on a separate thread, so the game
   keeps rendering. If the chooser cannot be created (for example on a headless JVM), the mod
   reports it in the GUI and the path field can be used to paste the file location instead.

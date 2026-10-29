@@ -37,6 +37,13 @@ import java.util.UUID;
  * entering or leaving the range can be synchronized to the current position.
  */
 public final class TapePlayerBlockEntity extends BlockEntity implements Container, MenuProvider {
+    /**
+     * Ticks between announcing a tape and the start of its playback clock. Clients use this
+     * window to download the file; without it, short clips often finished downloading after
+     * the tape had already ended and were silently skipped.
+     */
+    private static final int START_DELAY_TICKS = 20;
+
     private final NonNullList<ItemStack> items = NonNullList.withSize(1, ItemStack.EMPTY);
 
     private int range = Config.defaultPlaybackRange;
@@ -94,7 +101,7 @@ public final class TapePlayerBlockEntity extends BlockEntity implements Containe
             return;
         }
         playing = true;
-        startGameTime = serverLevel.getGameTime();
+        startGameTime = serverLevel.getGameTime() + START_DELAY_TICKS;
         playingMediaId = entry.getId();
         playingFormat = entry.getFormat();
         playingDurationSeconds = entry.getDurationSeconds();

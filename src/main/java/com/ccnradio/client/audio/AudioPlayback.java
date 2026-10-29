@@ -6,6 +6,7 @@ import javax.sound.sampled.AudioFormat;
 import javax.sound.sampled.AudioSystem;
 import javax.sound.sampled.SourceDataLine;
 import java.nio.file.Path;
+import java.util.Locale;
 
 /**
  * Java Sound based playback. It intentionally stays independent of Minecraft's OpenAL
@@ -16,10 +17,19 @@ public final class AudioPlayback {
     }
 
     public static AudioHandle play(Path file, String format, double offsetSeconds) throws Exception {
-        PcmSource source = "wav".equalsIgnoreCase(format) ? new WavPcmSource(file) : new OggPcmSource(file);
+        PcmSource source = createSource(file, format);
         Handle handle = new Handle(source, offsetSeconds);
         handle.start();
         return handle;
+    }
+
+    private static PcmSource createSource(Path file, String format) throws Exception {
+        String normalized = format == null ? "ogg" : format.toLowerCase(Locale.ROOT);
+        return switch (normalized) {
+            case "wav" -> new WavPcmSource(file);
+            case "mp3" -> new Mp3PcmSource(file);
+            default -> new OggPcmSource(file);
+        };
     }
 
     public interface AudioHandle {
@@ -128,8 +138,9 @@ public final class AudioPlayback {
 
         @Override
         public void stop() {
+            // Only signal the audio thread. Closing the line from the render thread can block
+            // it while the line is still draining, which stutters the whole game audio mix.
             stopped = true;
-            closeLine();
         }
 
         @Override

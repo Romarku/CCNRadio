@@ -1,7 +1,10 @@
 package com.ccnradio.media;
 
 import com.ccnradio.CCNRadioMod;
+import javazoom.jl.decoder.Bitstream;
+import javazoom.jl.decoder.Header;
 
+import java.io.ByteArrayInputStream;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -9,8 +12,8 @@ import java.util.Locale;
 import java.util.Optional;
 
 /**
- * Small, dependency-free audio header parser used for upload validation. Only the
- * duration and container format are needed; decoding happens on the client.
+ * Small audio header parser used for upload validation. Only the duration and container
+ * format are needed; decoding happens on the client.
  */
 public final class AudioMetadata {
     private AudioMetadata() {
@@ -21,7 +24,7 @@ public final class AudioMetadata {
 
     public static boolean isSupportedFileName(String fileName) {
         String lower = fileName.toLowerCase(Locale.ROOT);
-        return lower.endsWith(".ogg") || lower.endsWith(".wav");
+        return lower.endsWith(".ogg") || lower.endsWith(".wav") || lower.endsWith(".mp3");
     }
 
     public static String extensionOf(String fileName) {
@@ -52,6 +55,9 @@ public final class AudioMetadata {
         }
         if (startsWith(data, 0, "RIFF") && startsWith(data, 8, "WAVE")) {
             return parseWav(data);
+        }
+        if (isMp3(data)) {
+            return parseMp3(data);
         }
         // Unknown container: use the extension only to produce a useful error later.
         return Optional.empty();
@@ -102,6 +108,52 @@ public final class AudioMetadata {
             return Optional.empty();
         }
         return Optional.of(new AudioInfo("ogg", (int) seconds, data.length));
+    }
+
+    /**
+     * MP3 stores no total length header, so every frame is walked and its duration summed.
+     * This stays correct for VBR streams where the average bitrate is unknown.
+     */
+    private static Optional<AudioInfo> parseMp3(byte[] data) {
+        Bitstream bitstream = new Bitstream(new ByteArrayInputStream(data));
+        try {
+            double milliseconds = 0.0D;
+            int frames = 0;
+            Header header;
+            while ((header = bitstream.readFrame()) != null) {
+                milliseconds += header.ms_per_frame();
+                frames++;
+                bitstream.closeFrame();
+                if (frames >= 2_000_000) {
+                    break;
+                }
+            }
+            if (frames <= 0 || milliseconds <= 0.0D) {
+                return Optional.empty();
+            }
+            long seconds = Math.max(1L, Math.round(milliseconds / 1000.0D));
+            if (seconds > Integer.MAX_VALUE) {
+                return Optional.empty();
+            }
+            return Optional.of(new AudioInfo("mp3", (int) seconds, data.length));
+        } catch (Exception e) {
+            return Optional.empty();
+        } finally {
+            try {
+                bitstream.close();
+            } catch (Exception ignored) {
+            }
+        }
+    }
+
+    /**
+     * MP3 files either start with an ID3v2 tag or directly with an MPEG frame sync word.
+     */
+    private static boolean isMp3(byte[] data) {
+        if (startsWith(data, 0, "ID3")) {
+            return true;
+        }
+        return data.length >= 2 && (data[0] & 0xFF) == 0xFF && (data[1] & 0xE0) == 0xE0;
     }
 
     private static Optional<AudioInfo> parseWav(byte[] data) {

@@ -6,6 +6,7 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.util.Locale;
 import java.util.UUID;
 
 /**
@@ -13,6 +14,8 @@ import java.util.UUID;
  * leaving and re-entering the playback range does not download it again.
  */
 public final class AudioCache {
+    private static final String[] KNOWN_FORMATS = {"ogg", "wav", "mp3"};
+
     private static Path directory;
 
     private AudioCache() {
@@ -29,14 +32,21 @@ public final class AudioCache {
         return directory;
     }
 
-    public static Path find(UUID mediaId) {
-        Path ogg = pathFor(mediaId, "ogg");
-        if (Files.isRegularFile(ogg)) {
-            return ogg;
+    public static Path find(UUID mediaId, String format) {
+        String normalized = normalizeFormat(format);
+        Path direct = pathFor(mediaId, normalized);
+        if (Files.isRegularFile(direct)) {
+            return direct;
         }
-        Path wav = pathFor(mediaId, "wav");
-        if (Files.isRegularFile(wav)) {
-            return wav;
+        // Older cache entries may use a different extension if the server format changed.
+        for (String candidate : KNOWN_FORMATS) {
+            if (candidate.equals(normalized)) {
+                continue;
+            }
+            Path path = pathFor(mediaId, candidate);
+            if (Files.isRegularFile(path)) {
+                return path;
+            }
         }
         return null;
     }
@@ -59,6 +69,10 @@ public final class AudioCache {
     }
 
     public static String normalizeFormat(String format) {
-        return "wav".equalsIgnoreCase(format) ? "wav" : "ogg";
+        String lower = format == null ? "" : format.toLowerCase(Locale.ROOT);
+        return switch (lower) {
+            case "wav", "mp3" -> lower;
+            default -> "ogg";
+        };
     }
 }

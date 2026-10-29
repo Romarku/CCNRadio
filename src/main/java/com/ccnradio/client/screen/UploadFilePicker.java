@@ -93,7 +93,7 @@ public final class UploadFilePicker {
             chooser.setDialogTitle(title);
             chooser.setFileSelectionMode(JFileChooser.FILES_ONLY);
             chooser.setAcceptAllFileFilterUsed(true);
-            chooser.setFileFilter(new FileNameExtensionFilter(filterLabel, "ogg", "wav"));
+            chooser.setFileFilter(new FileNameExtensionFilter(filterLabel, "ogg", "wav", "mp3"));
 
             JDialog dialog = new JDialog((Frame) null, title, true);
             final boolean[] approved = new boolean[1];
@@ -139,7 +139,7 @@ public final class UploadFilePicker {
                 dialog.setDirectory(currentDirectory().getAbsolutePath());
                 dialog.setFilenameFilter((dir, name) -> {
                     String lower = name.toLowerCase(Locale.ROOT);
-                    return lower.endsWith(".ogg") || lower.endsWith(".wav");
+                    return lower.endsWith(".ogg") || lower.endsWith(".wav") || lower.endsWith(".mp3");
                 });
                 dialog.setAlwaysOnTop(true);
                 dialog.setVisible(true);

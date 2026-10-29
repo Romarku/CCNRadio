@@ -26,6 +26,10 @@ import java.util.UUID;
  * resumes at the correct position instead of restarting the tape.
  */
 public final class ClientPlaybackController {
+    private static final long REQUEST_TIMEOUT_MS = 10_000L;
+    private static final long RETRY_DELAY_MS = 1_000L;
+    private static final int MAX_DOWNLOAD_FAILURES = 3;
+
     private static final Map<BlockPos, PlaybackSession> SESSIONS = new HashMap<>();
     private static ResourceKey<Level> lastDimension;
 
@@ -84,6 +88,8 @@ public final class ClientPlaybackController {
         for (PlaybackSession session : SESSIONS.values()) {
             if (mediaId.equals(session.mediaId)) {
                 session.downloadRequested = false;
+                session.retryAt = 0L;
+                session.downloadFailures = 0;
                 session.audioFailed = false;
                 session.ensureAudio();
             }
@@ -94,7 +100,14 @@ public final class ClientPlaybackController {
         for (PlaybackSession session : SESSIONS.values()) {
             if (mediaId.equals(session.mediaId)) {
                 session.downloadRequested = false;
-                session.audioFailed = true;
+                session.downloadFailures++;
+                if (session.downloadFailures >= MAX_DOWNLOAD_FAILURES) {
+                    session.audioFailed = true;
+                } else {
+                    // A single transient failure (busy server, queue full, ...) must not
+                    // silence the tape for its whole playback; retry shortly.
+                    session.retryAt = System.currentTimeMillis() + RETRY_DELAY_MS;
+                }
             }
         }
     }
@@ -116,8 +129,10 @@ public final class ClientPlaybackController {
         private int durationSeconds;
         private AudioPlayback.AudioHandle audio;
         private boolean downloadRequested;
+        private long downloadRequestedAt;
+        private long retryAt;
+        private int downloadFailures;
         private boolean audioFailed;
-        private boolean requestedOnce;
 
         private PlaybackSession(BlockPos pos) {
             this.pos = pos;
@@ -129,8 +144,10 @@ public final class ClientPlaybackController {
             if (changedMedia || changedClock) {
                 stopAudio();
                 downloadRequested = false;
+                downloadRequestedAt = 0L;
+                retryAt = 0L;
+                downloadFailures = 0;
                 audioFailed = false;
-                requestedOnce = false;
             }
             this.mediaId = message.mediaId();
             this.format = message.format();
@@ -154,6 +171,12 @@ public final class ClientPlaybackController {
                 stopAudio();
                 return;
             }
+            long now = System.currentTimeMillis();
+            if (downloadRequested && now - downloadRequestedAt > REQUEST_TIMEOUT_MS) {
+                // The response never arrived (dropped packet, server hiccup); allow a retry.
+                downloadRequested = false;
+                retryAt = now + RETRY_DELAY_MS;
+            }
             if (audio == null && !audioFailed) {
                 ensureAudio();
             }
@@ -172,17 +195,20 @@ public final class ClientPlaybackController {
             if (distance > range) {
                 return;
             }
-            double offset = elapsedSeconds(minecraft);
-            if (offset < 0.0D || offset >= durationSeconds) {
-                return;
-            }
-            Path file = AudioCache.find(mediaId);
+            // Fetch the media before the playback clock starts so short clips are ready in
+            // time; the server announces tapes START_DELAY_TICKS before they actually start.
+            Path file = AudioCache.find(mediaId, format);
             if (file == null) {
-                if (!downloadRequested && !requestedOnce) {
+                long now = System.currentTimeMillis();
+                if (!downloadRequested && !audioFailed && now >= retryAt) {
                     downloadRequested = true;
-                    requestedOnce = true;
+                    downloadRequestedAt = now;
                     ModNetwork.sendToServer(new C2SRequestMediaDownload(mediaId));
                 }
+                return;
+            }
+            double offset = elapsedSeconds(minecraft);
+            if (offset < 0.0D || offset >= durationSeconds) {
                 return;
             }
             try {
@@ -201,8 +227,9 @@ public final class ClientPlaybackController {
             if (minecraft.level == null) {
                 return 0.0D;
             }
+            // Signed on purpose: negative values mean the tape is still in its start delay.
             long elapsedTicks = minecraft.level.getGameTime() - startGameTime;
-            return Math.max(0L, elapsedTicks) / 20.0D;
+            return elapsedTicks / 20.0D;
         }
 
         private void updateGain(Minecraft minecraft, double distance) {
